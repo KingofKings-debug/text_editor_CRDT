@@ -1,33 +1,36 @@
 // src/App.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import RoomManager from './RoomManager';
 import CollaborativeEditor from './CollaborativeEditor';
 
 export default function App() {
     const [roomData, setRoomData] = useState(null);
+    const [theme, setTheme] = useState('dark');
 
-    // If the user hasn't joined a room, show the Lobby
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    };
+
     if (!roomData) {
-        return <RoomManager onJoinRoom={setRoomData} />;
+        return (
+            <RoomManager
+                onJoinRoom={setRoomData}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+            />
+        );
     }
 
-    // Otherwise, render the Editor
     return (
-        <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                    <h2 style={{ margin: 0 }}>Room ID: {roomData.roomId}</h2>
-                    <small style={{ color: '#666' }}>Your Site ID: {roomData.siteId}</small>
-                </div>
-                <button
-                    onClick={() => setRoomData(null)}
-                    style={{ padding: '8px 16px', cursor: 'pointer' }}
-                >
-                    Leave Room
-                </button>
-            </header>
-
-            <CollaborativeEditor roomData={roomData} />
-        </div>
+        <CollaborativeEditor
+            roomData={roomData}
+            onLeaveRoom={() => setRoomData(null)}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+        />
     );
 }
