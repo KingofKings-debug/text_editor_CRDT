@@ -1,70 +1,116 @@
-# Getting Started with Create React App
+LSeq Collaborative Text Editor
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A real-time collaborative text editor built using the LSeq (List Sequence) Conflict-Free Replicated Data Type (CRDT). The editor enables multiple users to edit the same document simultaneously while ensuring all document replicas eventually converge to the same state without requiring centralized conflict resolution.
 
-## Available Scripts
+Features
 
-In the project directory, you can run:
+- Real-time collaborative editing
+- LSeq CRDT for conflict-free synchronization
+- Concurrent multi-user editing
+- Automatic conflict resolution
+- Character-level operations
+- Eventual consistency across replicas
+- Low-latency synchronization
+- Optional persistent document storage
+- Responsive web interface
 
-### `npm start`
+Overview
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+This project implements a collaborative text editor where every participant maintains a local replica of the document. Instead of transmitting the entire document after every change, clients exchange only edit operations such as character insertions and deletions.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Each client applies operations locally and propagates them to other collaborators. Since every operation is deterministic and based on immutable identifiers, all replicas eventually converge to the same document regardless of network latency or message ordering.
 
-### `npm test`
+About LSeq
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+LSeq is a sequence CRDT designed for collaborative editing applications.
 
-### `npm run build`
+Unlike traditional text editors that identify characters by their array position, LSeq assigns every character a unique position identifier. These identifiers remain stable throughout the lifetime of the document, allowing concurrent edits to be merged consistently across all replicas.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+This approach removes the need for operational transformation while naturally supporting distributed and offline editing.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+How Synchronization Works
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+When a user inserts a character, the client generates a new LSeq identifier and inserts the character into its local replica. The insertion operation is then shared with other collaborators, who independently apply the same operation.
 
-### `npm run eject`
+When a character is deleted, the operation references the character's identifier rather than its visual position. Every client removes the same identifier, ensuring consistent deletion across replicas.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Because operations reference immutable identifiers instead of mutable indices, concurrent edits can be merged deterministically without conflicts.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Operation Model
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Each edit is represented as an operation.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Insert Operation
 
-## Learn More
+An insert operation contains:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- Operation type
+- Generated LSeq identifier
+- Inserted character
+- Originating client information
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Delete Operation
 
-### Code Splitting
+A delete operation contains:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- Operation type
+- Identifier of the deleted character
+- Originating client information
 
-### Analyzing the Bundle Size
+Using identifiers instead of array indices allows every replica to process operations independently while producing identical document states.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Why LSeq?
 
-### Making a Progressive Web App
+LSeq provides several advantages for collaborative editing:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+- No centralized conflict resolution
+- Deterministic merging of concurrent edits
+- Eventual consistency across replicas
+- Support for offline editing and later synchronization
+- Efficient handling of concurrent insertions
+- Adaptive identifier allocation that limits identifier growth
 
-### Advanced Configuration
+These properties make LSeq well suited for distributed collaborative applications.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+Scalability
 
-### Deployment
+LSeq employs an adaptive allocation strategy for generating identifiers, helping keep identifier sizes relatively small even in large or long-lived collaborative documents. This improves both storage efficiency and synchronization performance compared to earlier sequence CRDTs.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Possible Enhancements
 
-### `npm run build` fails to minify
+Future improvements may include:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Rich text formatting
+- Collaborative cursor and selection sharing
+- User presence indicators
+- Undo and redo with CRDT support
+- Offline-first synchronization
+- Version history
+- Authentication and authorization
+- End-to-end encryption
+- Snapshot-based document loading
+- CRDT garbage collection
+
+Technologies
+
+This project is designed around modern web technologies and distributed systems concepts, including:
+
+- LSeq CRDT
+- WebSockets
+- JavaScript or TypeScript
+- Node.js
+- React or another frontend framework (optional)
+
+References
+
+- Weiss, M., Urso, P., & Molli, P. Logoot: A Scalable Optimistic Replication Algorithm for Collaborative Editing on P2P Networks.
+- Nédelec, B., Molli, P., Mostéfaoui, A., & Desmontils, E. LSEQ: An Adaptive Structure for Sequences in Distributed Collaborative Editing.
+- Research literature on Conflict-Free Replicated Data Types (CRDTs).
+
+License
+
+This project is licensed under the MIT License.
+
+---
+
+Contributions, feature requests, and bug reports are welcome.
