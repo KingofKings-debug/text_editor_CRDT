@@ -1,84 +1,159 @@
+```bash
 #!/bin/bash
 set -e
 
 echo "========================================================="
-echo "   AWS EC2 Deployment Script (Amazon Linux & Ubuntu)      "
+echo "       CRDT Text Editor - AWS EC2 Deployment"
 echo "========================================================="
 
-# Detect Package Manager & OS
-if command -v dnf &> /dev/null; then
-    PKG_MGR="dnf"
-elif command -v yum &> /dev/null; then
-    PKG_MGR="yum"
-elif command -v apt-get &> /dev/null; then
-    PKG_MGR="apt-get"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_DIR"
+
+echo ""
+echo "[1/6] Checking operating system..."
+
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    echo "Detected: $PRETTY_NAME"
 else
-    echo "Unsupported package manager."
+    echo "Could not detect operating system."
     exit 1
 fi
 
-echo "[1/4] System package manager detected: $PKG_MGR"
+echo ""
+echo "[2/6] Installing Docker..."
 
-# Install Docker if not present
-if ! command -v docker &> /dev/null; then
-    echo "[2/4] Installing Docker using $PKG_MGR..."
-    if [ "$PKG_MGR" = "dnf" ] || [ "$PKG_MGR" = "yum" ]; then
-        sudo $PKG_MGR update -y
-        sudo $PKG_MGR install -y docker
-        sudo systemctl enable --now docker
-        sudo usermod -aG docker $USER || true
-    elif [ "$PKG_MGR" = "apt-get" ]; then
-        sudo apt-get update -y
-        sudo apt-get install -y ca-certificates curl gnupg lsb-release
-        sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-        sudo apt-get update -y
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-        sudo usermod -aG docker $USER || true
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker not found. Installing..."
+
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf update -y
+        sudo dnf install -y docker
+    elif command -v yum >/dev/null 2>&1; then
+        sudo yum update -y
+        sudo amazon-linux-extras install docker -y 2>/dev/null || sudo yum install -y docker
+    else
+        echo "Unsupported package manager."
+        exit 1
     fi
-    echo "Docker installed successfully."
 else
-    echo "[2/4] Docker is already installed."
-    sudo systemctl start docker || true
+    echo "Docker already installed."
 fi
 
-# Ensure Docker Compose plugin or standalone binary is installed
-if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
+sudo systemctl enable docker
+sudo systemctl start docker
+
+echo ""
+echo "Docker version:"
+sudo docker --version
+
+echo ""
+echo "[3/6] Checking Docker Compose..."
+
+if sudo docker compose version >/dev/null 2>&1; then
+    COMPOSE="sudo docker compose"
+    echo "Using Docker Compose plugin."
+else
+    echo "Docker Compose plugin not found."
+
+    DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
+    mkdir -p "$DOCKER_CONFIG/cli-plugins"
+
     echo "Installing Docker Compose..."
-    DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
-    mkdir -p $DOCKER_CONFIG/cli-plugins
-    curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
-    chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
+
+    curl -SL \
+        "https://github.com/docker/compose/releases/download/v2.39.1/docker-compose-linux-x86_64" \
+        -o "$DOCKER_CONFIG/cli-plugins/docker-compose"
+
+    chmod +x "$DOCKER_CONFIG/cli-plugins/docker-compose"
+
+    if sudo docker compose version >/dev/null 2>&1; then
+        COMPOSE="sudo docker compose"
+    else
+        echo "Docker Compose installation failed."
+        exit 1
+    fi
 fi
 
-# Determine docker compose command to use
-if docker compose version &> /dev/null; then
-    DOCKER_COMPOSE_CMD="docker compose"
-else
-    DOCKER_COMPOSE_CMD="docker-compose"
-fi
+echo "Compose version:"
+$COMPOSE version
 
-# Ensure .env file exists
-if [ ! -f .env ]; then
-    echo "[3/4] Creating .env file from template..."
+echo ""
+echo "[4/6] Checking environment..."
+
+if [ ! -f ".env" ]; then
+
+    if [ ! -f ".env.example" ]; then
+        echo ".env.example not found."
+        echo "Cannot create .env."
+        exit 1
+    fi
+
+    echo "Creating .env from .env.example..."
+
     cp .env.example .env
-    SECRET_KEY_GEN=$(openssl rand -hex 32 2>/dev/null || date +%s | sha256sum | base64 | head -c 32)
-    JWT_SECRET_KEY_GEN=$(openssl rand -hex 32 2>/dev/null || date +%s | sha256sum | base64 | head -c 32)
-    sed -i "s/SECRET_KEY=.*/SECRET_KEY=$SECRET_KEY_GEN/" .env
-    sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$JWT_SECRET_KEY_GEN/" .env
-    echo ".env file generated with secure random secret keys."
+
+    if command -v openssl >/dev/null 2>&1; then
+        SECRET_KEY=$(openssl rand -hex 32)
+        JWT_SECRET_KEY=$(openssl rand -hex 32)
+    else
+        echo "openssl not found. Installing..."
+        sudo dnf install -y openssl 2>/dev/null || sudo yum install -y openssl
+
+        SECRET_KEY=$(openssl rand -hex 32)
+        JWT_SECRET_KEY=$(openssl rand -hex 32)
+    fi
+
+    if grep -q "^SECRET_KEY=" .env; then
+        sed -i "s/^SECRET_KEY=.*/SECRET_KEY=$SECRET_KEY/" .env
+    else
+        echo "SECRET_KEY=$SECRET_KEY" >> .env
+    fi
+
+    if grep -q "^JWT_SECRET_KEY=" .env; then
+        sed -i "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$JWT_SECRET_KEY/" .env
+    else
+        echo "JWT_SECRET_KEY=$JWT_SECRET_KEY" >> .env
+    fi
+
+    echo ".env created."
 else
-    echo "[3/4] Existing .env file found."
+    echo ".env already exists. Keeping existing configuration."
 fi
 
-# Build and start services
-echo "[4/4] Building and launching containers..."
-sudo $DOCKER_COMPOSE_CMD down --remove-orphans || true
-sudo $DOCKER_COMPOSE_CMD up --build -d
+echo ""
+echo "[5/6] Validating Docker Compose configuration..."
 
+$COMPOSE config
+
+echo ""
+echo "[6/6] Building and starting application..."
+
+$COMPOSE build
+
+$COMPOSE up -d
+
+echo ""
 echo "========================================================="
-echo "   Deployment Complete!"
-echo "   Access your app at http://<YOUR-EC2-PUBLIC-IP>/"
-echo "   Health check: http://<YOUR-EC2-PUBLIC-IP>/api/health"
+echo "             Deployment Complete!"
 echo "========================================================="
+
+echo ""
+echo "Running containers:"
+$COMPOSE ps
+
+echo ""
+echo "Application logs:"
+echo "    $COMPOSE logs --tail=100"
+
+echo ""
+echo "Follow logs:"
+echo "    $COMPOSE logs -f"
+
+echo ""
+echo "Health check:"
+echo "    curl http://localhost/api/health"
+
+echo ""
+echo "========================================================="
+```
