@@ -66,3 +66,6 @@ build/
 .vscode/
 .DS_Store
 >>>>>>> 3293451 (feat: CRDT Collaborative Text Editor with C++ WASM engine, RBAC auth, Redis store, Pytest suite, and AWS EC2 deployment)
+
+# Separate projects
+Chess_Engine_Demo/
