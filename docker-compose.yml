@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: crdt_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crdt_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=5000
+      - SECRET_KEY=${SECRET_KEY:-super-secret-production-key-123}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-jwt-production-key-456}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///hackathon.db}
+      - REDIS_URL=redis://redis:6379/0
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_data:/app/instance
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=/api
+    container_name: crdt_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  redis_data:
+  backend_data:
