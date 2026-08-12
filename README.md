@@ -97,16 +97,9 @@ This project is designed around modern web technologies and distributed systems 
 
 - LSeq CRDT
 - WebSockets
-- JavaScript or TypeScript
+- JavaScript
 - Node.js
-- React or another frontend framework (optional)
-
-References
-
-- Weiss, M., Urso, P., & Molli, P. Logoot: A Scalable Optimistic Replication Algorithm for Collaborative Editing on P2P Networks.
-- Nédelec, B., Molli, P., Mostéfaoui, A., & Desmontils, E. LSEQ: An Adaptive Structure for Sequences in Distributed Collaborative Editing.
-- Research literature on Conflict-Free Replicated Data Types (CRDTs).
-
+- React
 License
 
 This project is licensed under the MIT License.
