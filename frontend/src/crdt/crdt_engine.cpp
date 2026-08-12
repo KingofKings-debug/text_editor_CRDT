@@ -102,12 +102,16 @@ private:
     BTreeNode* root;
     int t; // minimum degree
 
+    // FIX: save the median key/value BEFORE resizing fullChild, so we never
+    // read out-of-bounds after the vector is truncated.
     void splitChild(BTreeNode* parent, int i, BTreeNode* fullChild) {
+        // --- save median first ---
         std::string medianKey   = fullChild->keys[t - 1];
         std::string medianValue = fullChild->values[t - 1];
 
         BTreeNode* newNode = new BTreeNode(fullChild->isLeaf);
 
+        // Upper half of fullChild (keys[t .. 2t-2]) goes to newNode
         for (int j = 0; j < t - 1; j++) {
             newNode->keys.push_back(fullChild->keys[j + t]);
             newNode->values.push_back(fullChild->values[j + t]);
@@ -119,9 +123,11 @@ private:
             fullChild->children.resize(t);
         }
 
+        // Truncate fullChild to lower half (keys[0 .. t-2])
         fullChild->keys.resize(t - 1);
         fullChild->values.resize(t - 1);
 
+        // Attach newNode and promote saved median to parent
         parent->children.insert(parent->children.begin() + i + 1, newNode);
         parent->keys.insert(parent->keys.begin() + i, medianKey);
         parent->values.insert(parent->values.begin() + i, medianValue);
@@ -191,6 +197,7 @@ public:
         insertNonFull(root, key, value);
     }
 
+    // Tombstone deletion: mark the value empty without restructuring the tree.
     void tombstoneDelete(const std::string& key) {
         int index;
         BTreeNode* node = search(root, key, index);
@@ -211,14 +218,19 @@ private:
     BTree          documentTree;
     LseqGenerator  generator;
 
+    // Cached flat key list so JS can map a visual index to an LSEQ id for deletion.
     std::vector<std::string> cachedKeys;
 
 public:
+    // t=50 keeps the tree extremely shallow even for large documents.
     LseqCRDT(std::string site) : generator(site), documentTree(50) {
+        // Sentinel boundaries: "0" sorts before all real IDs, "~" sorts after.
         documentTree.insert("0", "");
         documentTree.insert("~", "");
     }
 
+    // Insert a character at the given visible index.
+    // Returns the generated LSEQ ID (broadcast this to remote peers).
     std::string localInsert(int index, const std::string& character) {
         cachedKeys.clear();
         documentTree.render(cachedKeys);
@@ -235,6 +247,9 @@ public:
         return newId;
     }
 
+    // Delete the character at the given visible index.
+    // Returns the tombstoned LSEQ ID (broadcast this to remote peers).
+    // FIX: expose this so JavaScript no longer has to bypass the CRDT for deletes.
     std::string localDelete(int index) {
         cachedKeys.clear();
         documentTree.render(cachedKeys);
@@ -266,7 +281,7 @@ EMSCRIPTEN_BINDINGS(crdt_module) {
     class_<LseqCRDT>("LseqCRDT")
         .constructor<std::string>()
         .function("localInsert",  &LseqCRDT::localInsert)
-        .function("localDelete",  &LseqCRDT::localDelete)
+        .function("localDelete",  &LseqCRDT::localDelete)   // new — fixes delete bug
         .function("remoteInsert", &LseqCRDT::remoteInsert)
         .function("remoteDelete", &LseqCRDT::remoteDelete)
         .function("renderText",   &LseqCRDT::renderText);

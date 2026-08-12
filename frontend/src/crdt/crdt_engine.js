@@ -18,10 +18,16 @@ export async function loadWasmCrdtModule() {
     wasmModulePromise = (async () => {
       try {
         // Attempt to import the compiled Emscripten WASM ES6 module
-        const moduleImport = await import(/* @vite-ignore */ './crdt_wasm.js');
+        const wasmPath = './crdt_wasm.js';
+        const moduleImport = await import(/* @vite-ignore */ wasmPath);
         const createModule = moduleImport.default || moduleImport.createCrdtModule;
         if (typeof createModule === 'function') {
-          const instance = await createModule();
+          const instance = await createModule({
+            locateFile: (path) => {
+              if (path.endsWith('.wasm')) return '/crdt_wasm.wasm';
+              return path;
+            }
+          });
           console.log("Successfully loaded C++ WebAssembly LseqCRDT module!");
           return instance;
         }
